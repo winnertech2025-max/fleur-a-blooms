@@ -1,16 +1,57 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { FlowProvider, useFlow } from "@/contexts/FlowContext";
+import { StepTransition } from "@/components/StepTransition";
+import { StepIndicator } from "@/components/StepIndicator";
+import { SplashScreen } from "@/components/steps/SplashScreen";
+import { MoodStep } from "@/components/steps/MoodStep";
+import { RecipientStep } from "@/components/steps/RecipientStep";
+import { BudgetStep } from "@/components/steps/BudgetStep";
+import { DescriptionStep } from "@/components/steps/DescriptionStep";
+import { ResultStep } from "@/components/steps/ResultStep";
+import { PetalBackground } from "@/components/PetalBackground";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const TOTAL_STEPS = 4;
+
+const FlowContent = () => {
+  const { step, direction } = useFlow();
+  const [started, setStarted] = useState(false);
+
+  if (!started) {
+    return <SplashScreen onStart={() => setStarted(true)} />;
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="relative flex flex-col min-h-screen bg-cream">
+      <PetalBackground />
+      
+      {/* Header */}
+      <div className="relative z-10 flex items-center justify-between px-6 pt-6 pb-2">
+        <h1 className="text-lg font-display font-semibold text-foreground tracking-wide">
+          FLEURÉA
+        </h1>
+        {step < TOTAL_STEPS && (
+          <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
+        )}
+      </div>
+
+      {/* Step Content */}
+      <div className="relative z-10 flex-1 flex items-start justify-center overflow-hidden">
+        <StepTransition stepKey={`step-${step}`} direction={direction}>
+          {step === 0 && <MoodStep />}
+          {step === 1 && <RecipientStep />}
+          {step === 2 && <BudgetStep />}
+          {step === 3 && <DescriptionStep />}
+          {step >= 4 && <ResultStep />}
+        </StepTransition>
+      </div>
     </div>
   );
 };
 
-const Index = PlaceholderIndex;
+const Index = () => (
+  <FlowProvider>
+    <FlowContent />
+  </FlowProvider>
+);
 
 export default Index;
