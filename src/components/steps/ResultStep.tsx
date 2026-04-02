@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 export const ResultStep = () => {
   const { data, reset } = useFlow();
-  const navigate = useNavigate();
+  
   const [loading, setLoading] = useState(true);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
