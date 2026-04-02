@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Loader2, Flower2, Download, RotateCcw, QrCode } from "lucide-react";
+import { Loader2, Flower2, RotateCcw, QrCode } from "lucide-react";
 import { useFlow } from "@/contexts/FlowContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
