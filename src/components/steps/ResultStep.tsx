@@ -6,7 +6,6 @@ import { useFlow } from "@/contexts/FlowContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 export const ResultStep = () => {
