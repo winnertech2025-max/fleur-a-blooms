@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+// eslint-disable-next-line react-hooks/exhaustive-deps
 import { useEffect, useState } from "react";
 import { Loader2, Flower2, RotateCcw, QrCode } from "lucide-react";
 import { useFlow } from "@/contexts/FlowContext";
