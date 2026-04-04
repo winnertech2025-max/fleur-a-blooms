@@ -1,137 +1,100 @@
-import { motion } from "framer-motion";
-// eslint-disable-next-line react-hooks/exhaustive-deps
+// ResultStep.tsx
+import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Loader2, Flower2, RotateCcw, QrCode } from "lucide-react";
+import { Flower2, RotateCcw, QrCode, Sparkles, CheckCircle2 } from "lucide-react";
 import { useFlow } from "@/contexts/FlowContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
+const loadingPhrases = [
+  "Selecting the freshest blooms...",
+  "Composing your arrangement...",
+  "Adding finishing touches...",
+  "Wrapping with love...",
+];
+
 export const ResultStep = () => {
   const { data, reset } = useFlow();
-  
   const [loading, setLoading] = useState(true);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [phraseIndex, setPhraseIndex] = useState(0);
 
+  useEffect(() => { generateBouquet(); }, []);
   useEffect(() => {
-    generateBouquet();
-  }, []);
+    if (!loading) return;
+    const interval = setInterval(() => setPhraseIndex((i) => (i + 1) % loadingPhrases.length), 2200);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const generateBouquet = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch flowers matching the mood
-      const { data: flowers } = await supabase
-        .from("flowers")
-        .select("*")
-        .eq("mood", data.mood!)
-        .eq("in_stock", true);
-
+      setLoading(true); setError(null);
+      const { data: flowers } = await supabase.from("flowers").select("*").eq("mood", data.mood!).eq("in_stock", true);
       const flowerNames = flowers?.map((f) => f.name) || [];
-      const flowerIngredients = flowers?.map((f) => `${f.name} - ${f.price_per_stem.toLocaleString()} VNĐ/stem`) || [];
-
-      // Call edge function to generate bouquet image
+      const flowerIngredients = flowers?.map((f) => `${f.name} · ${f.price_per_stem.toLocaleString()}đ/stem`) || [];
       const { data: genData, error: genError } = await supabase.functions.invoke("generate-bouquet", {
-        body: {
-          mood: data.mood,
-          recipient: data.recipient,
-          budget: data.budget,
-          description: data.description,
-          flowerNames,
-        },
+        body: { mood: data.mood, recipient: data.recipient, budget: data.budget, description: data.description, flowerNames },
       });
-
       if (genError) throw genError;
-
       const imageUrl = genData?.imageUrl;
       if (!imageUrl) throw new Error("No image generated");
-
       setGeneratedImageUrl(imageUrl);
       setIngredients(flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`]);
-
-      // Create order
       const qrData = crypto.randomUUID();
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert({
-          mood: data.mood!,
-          recipient_type: data.recipient,
-          budget: data.budget,
-          user_description: data.description || null,
-          selected_flower_ids: flowers?.map((f) => f.id) || [],
-          generated_image_url: imageUrl,
-          qr_code_data: qrData,
-          ingredients: flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`],
-          status: "pending",
-        })
-        .select()
-        .single();
-
+      const { data: order, error: orderError } = await supabase.from("orders").insert({
+        mood: data.mood!, recipient_type: data.recipient, budget: data.budget,
+        user_description: data.description || null, selected_flower_ids: flowers?.map((f) => f.id) || [],
+        generated_image_url: imageUrl, qr_code_data: qrData,
+        ingredients: flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`],
+        status: "pending",
+      }).select().single();
       if (orderError) throw orderError;
-
       setOrderId(order.id);
     } catch (err: any) {
-      console.error("Generation error:", err);
       setError(err.message || "Failed to generate bouquet");
       toast.error("Failed to generate bouquet. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  const shareUrl = orderId
-    ? `${window.location.origin}/bouquet/${orderId}`
-    : "";
+  const shareUrl = orderId ? `${window.location.origin}/bouquet/${orderId}` : "";
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center text-center"
-        >
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-            className="mb-6"
-          >
-            <div className="w-20 h-20 rounded-full gradient-pink flex items-center justify-center">
-              <Flower2 className="w-10 h-10 text-primary-foreground" />
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Loader2 className="w-6 h-6 animate-spin text-primary mb-4" />
-          </motion.div>
-
-          <h2 className="text-2xl font-display font-semibold text-foreground mb-2">
-            Crafting your bouquet...
-          </h2>
-          <p className="text-muted-foreground font-body text-sm">
-            Our AI is designing something beautiful just for you
-          </p>
-
-          <motion.div className="flex gap-1 mt-6">
+      <div className="flex items-center justify-center min-h-screen px-6">
+        <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center text-center max-w-xs">
+          <div className="relative mb-10">
+            <motion.div className="absolute inset-[-16px] rounded-full border border-primary/20"
+              animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.8, 0.4] }}
+              transition={{ duration: 2.5, repeat: Infinity }} />
+            <motion.div className="absolute inset-[-8px] rounded-full border border-dashed border-primary/25"
+              animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }} />
+            <motion.div className="w-24 h-24 rounded-full gradient-pink flex items-center justify-center shadow-xl shadow-primary/20"
+              animate={{ rotate: [0, 8, -8, 0] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}>
+              <Flower2 className="w-11 h-11 text-primary-foreground" />
+            </motion.div>
+          </div>
+          <h2 className="text-3xl font-display font-semibold text-foreground mb-3">Crafting your bouquet</h2>
+          <div className="h-5 mb-8 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.p key={phraseIndex} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.4 }} className="text-sm font-body text-muted-foreground italic">
+                {loadingPhrases[phraseIndex]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+          <div className="flex gap-2">
             {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                className="w-2 h-2 rounded-full bg-primary"
-                animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-              />
+              <motion.div key={i} className="w-2 h-2 rounded-full bg-primary"
+                animate={{ scale: [1, 1.6, 1], opacity: [0.4, 1, 0.4] }}
+                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }} />
             ))}
-          </motion.div>
+          </div>
         </motion.div>
       </div>
     );
@@ -139,23 +102,16 @@ export const ResultStep = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <h2 className="text-2xl font-display font-semibold text-foreground mb-4">
-            Oops, something went wrong
-          </h2>
-          <p className="text-muted-foreground font-body mb-6">{error}</p>
-          <div className="flex gap-3">
-            <Button variant="hero" onClick={generateBouquet}>
-              <RotateCcw className="w-4 h-4 mr-2" /> Try Again
-            </Button>
-            <Button variant="outline-primary" onClick={reset}>
-              Start Over
-            </Button>
+      <div className="flex items-center justify-center min-h-screen px-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-xs">
+          <div className="w-16 h-16 rounded-full bg-pink-soft flex items-center justify-center mx-auto mb-6">
+            <Flower2 className="w-8 h-8 text-primary" />
+          </div>
+          <h2 className="text-2xl font-display font-semibold text-foreground mb-2">Something went wrong</h2>
+          <p className="text-muted-foreground font-body text-sm mb-8 leading-relaxed">{error}</p>
+          <div className="flex flex-col gap-3">
+            <Button variant="hero" className="w-full rounded-2xl" onClick={generateBouquet}><RotateCcw className="w-4 h-4 mr-2" />Try Again</Button>
+            <Button variant="ghost" className="w-full rounded-2xl text-muted-foreground" onClick={reset}>Start Over</Button>
           </div>
         </motion.div>
       </div>
@@ -163,100 +119,153 @@ export const ResultStep = () => {
   }
 
   return (
-    <div className="flex flex-col items-center px-6 py-8 max-w-lg mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full text-center"
-      >
-        <h2 className="text-3xl font-display font-semibold text-foreground mb-1">
-          Your Bouquet
-        </h2>
-        <p className="text-muted-foreground font-body text-sm mb-6">
-          Designed with love, just for you
-        </p>
-      </motion.div>
+    <div className="flex flex-col min-h-screen px-6 md:px-12 py-8 max-w-5xl mx-auto w-full gap-6">
 
-      {/* Generated Image */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2 }}
-        className="w-full aspect-square rounded-2xl overflow-hidden shadow-xl mb-6 border border-border"
-      >
-        {generatedImageUrl && (
-          <img
-            src={generatedImageUrl}
-            alt="Your generated bouquet"
-            className="w-full h-full object-cover"
-          />
-        )}
-      </motion.div>
-
-      {/* Ingredients */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="w-full glass-card rounded-2xl p-5 mb-6"
-      >
-        <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2">
-          <Flower2 className="w-4 h-4 text-primary" /> Ingredients
-        </h3>
-        <ul className="space-y-1">
-          {ingredients.map((ing, i) => (
-            <li key={i} className="text-sm font-body text-muted-foreground">
-              • {ing}
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3 pt-3 border-t border-border">
-          <p className="text-sm font-body">
-            <span className="text-muted-foreground">Mood:</span>{" "}
-            <span className="font-medium text-foreground capitalize">{data.mood}</span>
-          </p>
-          <p className="text-sm font-body">
-            <span className="text-muted-foreground">For:</span>{" "}
-            <span className="font-medium text-foreground capitalize">{data.recipient}</span>
-          </p>
-          <p className="text-sm font-body">
-            <span className="text-muted-foreground">Budget:</span>{" "}
-            <span className="font-medium text-foreground">{data.budget.toLocaleString()} VNĐ</span>
-          </p>
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-body tracking-[0.3em] uppercase text-muted-foreground/50 mb-1">Complete</p>
+          <h2 className="text-4xl font-display font-semibold text-foreground leading-tight">Your Bouquet</h2>
         </div>
+        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 260, damping: 18, delay: 0.2 }}
+          className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <CheckCircle2 className="w-6 h-6 text-primary" />
+        </motion.div>
       </motion.div>
 
-      {/* QR Code */}
-      {orderId && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="w-full glass-card rounded-2xl p-6 mb-6 flex flex-col items-center"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <QrCode className="w-5 h-5 text-primary" />
-            <h3 className="font-display font-semibold text-foreground">Your Bill QR</h3>
-          </div>
-          <div className="bg-card p-4 rounded-xl border border-border">
-            <QRCodeSVG
-              value={shareUrl}
-              size={180}
-              bgColor="transparent"
-              fgColor="hsl(340, 10%, 15%)"
-              level="M"
-            />
-          </div>
-          <p className="text-xs font-body text-muted-foreground mt-3 text-center">
-            Scan to view your bouquet details
-          </p>
-        </motion.div>
-      )}
+      {/* Main 2-col layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 flex-1">
 
-      <div className="flex gap-3 w-full">
-        <Button variant="hero" size="lg" className="flex-1 rounded-xl" onClick={reset}>
-          <RotateCcw className="w-4 h-4 mr-2" /> New Bouquet
-        </Button>
+        {/* LEFT COL: Image */}
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
+          className="flex flex-col gap-4">
+          {/* Bouquet image */}
+          <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-primary/10 aspect-[4/5]">
+            {generatedImageUrl && (
+              <img src={generatedImageUrl} alt="Your bouquet" className="w-full h-full object-cover" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+            {/* Mood badge */}
+            <div className="absolute top-4 left-4">
+              <div className="flex items-center gap-1.5 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/60 shadow-sm">
+                <Sparkles className="w-3 h-3 text-primary" />
+                <span className="text-[11px] font-body font-semibold text-primary capitalize">{data.mood}</span>
+              </div>
+            </div>
+            {/* Bottom info overlay */}
+            <div className="absolute bottom-0 left-0 right-0 p-4">
+              <div className="flex gap-2">
+                <span className="px-2.5 py-1 rounded-full bg-white/80 backdrop-blur-sm border border-white/50 text-[10px] font-body font-medium text-foreground capitalize">
+                  For {data.recipient}
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-white/80 backdrop-blur-sm border border-white/50 text-[10px] font-body font-medium text-foreground">
+                  {data.budget.toLocaleString()}đ
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Ingredients card under image */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+            className="glass-card rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Flower2 className="w-3.5 h-3.5 text-primary" />
+              </div>
+              <p className="text-sm font-display font-semibold text-foreground">Bouquet Ingredients</p>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+              {ingredients.map((ing, i) => {
+                const [name, price] = ing.split(" · ");
+                return (
+                  <motion.div key={i} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 + i * 0.07 }}
+                    className="flex flex-col border-l-2 border-primary/20 pl-2.5">
+                    <span className="text-xs font-body font-semibold text-foreground leading-none mb-0.5">{name}</span>
+                    {price && <span className="text-[10px] font-body text-muted-foreground">{price}</span>}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        </motion.div>
+
+        {/* RIGHT COL: Details + QR + CTA */}
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+          className="flex flex-col gap-4">
+
+          {/* Order summary card */}
+          <div className="glass-card rounded-2xl p-5">
+            <p className="text-[10px] font-body tracking-[0.25em] uppercase text-muted-foreground/50 mb-4">Order Summary</p>
+            <div className="space-y-4">
+              {[
+                { label: "Mood", value: data.mood },
+                { label: "For", value: data.recipient },
+                { label: "Budget", value: `${data.budget.toLocaleString()} VNĐ` },
+              ].map((row, i) => (
+                <div key={row.label}>
+                  {i > 0 && <div className="h-px bg-border/40 mb-4" />}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-body text-muted-foreground">{row.label}</p>
+                    <p className="text-sm font-body font-semibold text-foreground capitalize">{row.value}</p>
+                  </div>
+                </div>
+              ))}
+              {data.description && (
+                <>
+                  <div className="h-px bg-border/40" />
+                  <div>
+                    <p className="text-xs font-body text-muted-foreground mb-1.5">Your note</p>
+                    <p className="text-xs font-body text-foreground/70 italic leading-relaxed">"{data.description}"</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* QR Code card */}
+          {orderId && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+              className="glass-card rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <QrCode className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-display font-semibold text-foreground leading-none">Bill QR Code</p>
+                  <p className="text-[10px] font-body text-muted-foreground mt-0.5">Show this at the counter</p>
+                </div>
+              </div>
+              {/* QR + info side by side */}
+              <div className="flex items-center gap-5">
+                <div className="bg-white p-3 rounded-2xl shadow-sm border border-border/30 shrink-0">
+                  <QRCodeSVG value={shareUrl} size={110} bgColor="#ffffff" fgColor="hsl(340,10%,15%)" level="M" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-body text-muted-foreground leading-relaxed">
+                    Scan to view and confirm your bouquet order at checkout.
+                  </p>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-pink-soft border border-primary/15 text-[10px] font-body text-primary w-fit">
+                    ✦ Pending order
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* CTA */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
+            className="flex flex-col gap-3 mt-auto">
+            <Button variant="hero" size="lg" className="w-full rounded-2xl" onClick={reset}>
+              <Flower2 className="w-4 h-4 mr-2" /> Create New Bouquet
+            </Button>
+            <p className="text-center text-[10px] tracking-[0.25em] uppercase text-muted-foreground/35 font-body">
+              Thank you for choosing Fleuréa ✦
+            </p>
+          </motion.div>
+        </motion.div>
       </div>
     </div>
   );

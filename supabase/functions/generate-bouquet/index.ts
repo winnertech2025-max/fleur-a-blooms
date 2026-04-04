@@ -14,12 +14,11 @@ serve(async (req) => {
   try {
     const { mood, recipient, budget, description, flowerNames } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    // Build a detailed prompt for bouquet generation
     const flowerList = flowerNames && flowerNames.length > 0
       ? flowerNames.join(", ")
       : "assorted seasonal flowers";
@@ -50,60 +49,54 @@ The bouquet should be:
 - Magazine-quality flower photography style
 - No text or watermarks`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [
-          {
-            role: "user",
-            content: prompt,
+    // Call Gemini imagen API
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: "1:1",
           },
-        ],
-        modalities: ["image", "text"],
-      }),
-    });
+        }),
+      }
+    );
 
     if (!response.ok) {
+      const text = await response.text();
+      console.error("Gemini API error:", response.status, text);
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limited. Please try again shortly." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Credits exhausted. Please add funds." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error(`Gemini API error: ${response.status} - ${text}`);
     }
 
     const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const base64Image = data.predictions?.[0]?.bytesBase64Encoded;
 
-    if (!imageUrl) {
+    if (!base64Image) {
       throw new Error("No image was generated");
     }
 
-    // Upload base64 image to Supabase storage
+    const imageUrl = `data:image/png;base64,${base64Image}`;
+
+    // Upload to Supabase storage
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Extract base64 data
-    const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, "");
-    const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-    
+    const imageBytes = Uint8Array.from(atob(base64Image), (c) => c.charCodeAt(0));
     const fileName = `bouquet-${crypto.randomUUID()}.png`;
+
     const { error: uploadError } = await supabase.storage
       .from("bouquets")
       .upload(fileName, imageBytes, {
@@ -113,7 +106,7 @@ The bouquet should be:
 
     if (uploadError) {
       console.error("Upload error:", uploadError);
-      // Return base64 directly as fallback
+      // Fallback: return base64 directly
       return new Response(
         JSON.stringify({ imageUrl }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
