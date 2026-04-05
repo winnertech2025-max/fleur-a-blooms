@@ -21,7 +21,7 @@ const FlowContent = () => {
   }
 
   return (
-    <div className="relative flex flex-col min-h-screen bg-cream">
+    <div className="relative flex flex-col min-h-screen animated-gradient-bg">
       <PetalBackground />
       
       {/* Header */}

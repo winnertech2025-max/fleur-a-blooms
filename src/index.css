@@ -129,3 +129,34 @@
     background-color: hsl(var(--cream));
   }
 }
+
+@keyframes moveBackground {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 0% -1000%;
+  }
+}
+
+@keyframes colorShift {
+  0%   { background-position: 0% 50%; }
+  25%  { background-position: 50% 100%; }
+  50%  { background-position: 100% 50%; }
+  75%  { background-position: 50% 0%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animated-gradient-bg {
+  background: linear-gradient(
+    135deg,
+    hsl(340, 70%, 92%),
+    hsl(20, 80%, 94%),
+    hsl(345, 60%, 88%),
+    hsl(30, 70%, 93%),
+    hsl(310, 50%, 90%),
+    hsl(355, 65%, 91%)
+  );
+  background-size: 400% 400%;
+  animation: colorShift 12s ease infinite;
+}

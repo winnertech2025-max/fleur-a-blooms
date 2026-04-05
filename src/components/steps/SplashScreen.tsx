@@ -1,8 +1,8 @@
 // SplashScreen.tsx
 import { motion } from "framer-motion";
 import { Flower2, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PetalBackground } from "@/components/PetalBackground";
+import { GlassButton, GlassFilter, GlassEffect } from "@/components/ui/liquid-glass";
 
 interface SplashScreenProps {
   onStart: () => void;
@@ -10,7 +10,8 @@ interface SplashScreenProps {
 
 export const SplashScreen = ({ onStart }: SplashScreenProps) => {
   return (
-    <div className="relative flex items-center justify-center min-h-screen px-8 overflow-hidden bg-cream">
+    <div className="relative flex items-center justify-center min-h-screen px-8 overflow-hidden animated-gradient-bg">
+      <GlassFilter />
       <PetalBackground />
 
       {/* Radial glow */}
@@ -84,36 +85,44 @@ export const SplashScreen = ({ onStart }: SplashScreenProps) => {
           transition={{ duration: 0.8, ease: "easeOut", delay: 0.3 }}
         >
           {/* Feature pills */}
-          {[
-            { icon: "✦", text: "Mood-based bouquet design" },
-            { icon: "✿", text: "Tailored to your recipient" },
-            { icon: "★", text: "Fits your exact budget" },
-          ].map((f, i) => (
-            <motion.div key={f.text}
-              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.7 + i * 0.12 }}
-              className="flex items-center gap-4 w-full glass-card rounded-2xl px-5 py-4"
-            >
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary text-base shrink-0">
-                {f.icon}
-              </div>
-              <span className="font-body text-sm text-foreground/80">{f.text}</span>
-            </motion.div>
-          ))}
+          <div className="w-full flex flex-col gap-4">
+            {[
+              { icon: "✦", text: "Mood-based bouquet design" },
+              { icon: "✿", text: "Tailored to your recipient" },
+              { icon: "★", text: "Fits your exact budget" },
+            ].map((f, i) => (
+              <motion.div key={f.text}
+                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.7 + i * 0.12 }}
+                className="w-full"
+              >
+                <GlassEffect
+                  className="flex items-center gap-4 w-full rounded-2xl px-5 py-4 bg-white/60 shadow-lg shadow-black/5"
+                  overlayColor="rgba(255, 255, 255, 0.4)"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary text-base shrink-0">
+                    {f.icon}
+                  </div>
+                  <span className="font-body text-sm text-foreground/80 font-medium z-10 relative">{f.text}</span>
+                </GlassEffect>
+              </motion.div>
+            ))}
+          </div>
 
-          {/* CTA */}
-          <motion.div className="w-full pt-2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-              <Button variant="hero" size="xl" onClick={onStart}
-                className="w-full rounded-2xl shadow-lg shadow-primary/20 relative overflow-hidden group">
-                <span className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                <Flower2 className="w-5 h-5 mr-2 relative z-10" />
-                <span className="relative z-10">Start Your Journey</span>
-              </Button>
-            </motion.div>
-            <p className="text-center text-[10px] tracking-[0.3em] uppercase text-muted-foreground/35 font-body mt-4">
-              Free · No sign-up required
-            </p>
+          {/* Liquid Glass CTA & Dock */}
+          <motion.div className="w-full pt-4 flex flex-col items-center gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}>
+            
+<div className="w-full">
+              <GlassButton onClick={onStart} className="w-full">
+                <div className="flex items-center justify-center text-xl text-primary-foreground font-semibold gap-3">
+                  <Flower2 className="w-6 h-6" />
+                  <span>Start Your Journey</span>
+                </div>
+              </GlassButton>
+              <p className="text-center text-[10px] tracking-[0.3em] uppercase text-muted-foreground/50 font-body mt-4 font-semibold">
+                Free · No sign-up required
+              </p>
+            </div>
           </motion.div>
         </motion.div>
       </div>
