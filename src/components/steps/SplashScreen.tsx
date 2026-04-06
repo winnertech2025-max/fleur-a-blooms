@@ -2,7 +2,8 @@
 import { motion } from "framer-motion";
 import { Flower2, Sparkles } from "lucide-react";
 import { PetalBackground } from "@/components/PetalBackground";
-import { GlassButton, GlassFilter, GlassEffect } from "@/components/ui/liquid-glass";
+import { GlassFilter, GlassEffect } from "@/components/ui/liquid-glass";
+import { Button } from "@/components/ui/button";
 
 interface SplashScreenProps {
   onStart: () => void;
@@ -113,12 +114,10 @@ export const SplashScreen = ({ onStart }: SplashScreenProps) => {
           <motion.div className="w-full pt-4 flex flex-col items-center gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}>
             
 <div className="w-full">
-              <GlassButton onClick={onStart} className="w-full">
-                <div className="flex items-center justify-center text-xl text-primary-foreground font-semibold gap-3">
-                  <Flower2 className="w-6 h-6" />
-                  <span>Start Your Journey</span>
-                </div>
-              </GlassButton>
+              <Button variant="cartoon" size="xl" onClick={onStart} className="w-full">
+                <Flower2 className="w-6 h-6" />
+                <span>Start Your Journey</span>
+              </Button>
               <p className="text-center text-[10px] tracking-[0.3em] uppercase text-muted-foreground/50 font-body mt-4 font-semibold">
                 Free · No sign-up required
               </p>

@@ -1,35 +1,31 @@
-import { motion } from "framer-motion";
-import { Flower2 } from "lucide-react";
+import { useMemo } from "react";
 
 export const PetalBackground = () => {
-  const petals = Array.from({ length: 8 });
-  
+  const petals = useMemo(() => {
+    return Array.from({ length: 15 }, (_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      width: 8 + Math.random() * 10,
+      height: 8 + Math.random() * 10,
+      duration: 8 + Math.random() * 10,
+      delay: Math.random() * 12,
+    }));
+  }, []);
+
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      {petals.map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute text-primary/10"
-          initial={{
-            x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 400),
-            y: -50,
-            rotate: 0,
-            opacity: 0.3,
+    <div className="fixed inset-0 overflow-hidden pointer-events-none z-[1]">
+      {petals.map((p) => (
+        <div
+          key={p.id}
+          className="falling-petal"
+          style={{
+            left: p.left,
+            width: `${p.width}px`,
+            height: `${p.height}px`,
+            animationDuration: `${p.duration}s`,
+            animationDelay: `${p.delay}s`,
           }}
-          animate={{
-            y: typeof window !== 'undefined' ? window.innerHeight + 50 : 900,
-            rotate: 720,
-            opacity: 0,
-          }}
-          transition={{
-            duration: 8 + Math.random() * 6,
-            repeat: Infinity,
-            delay: i * 1.5,
-            ease: "linear",
-          }}
-        >
-          <Flower2 size={16 + Math.random() * 16} />
-        </motion.div>
+        />
       ))}
     </div>
   );
