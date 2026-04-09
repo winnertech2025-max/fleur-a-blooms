@@ -8,6 +8,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
+interface StemItem {
+  flowerId: string;
+  flowerName: string;
+  pricePerStem: number;
+  stems: number;
+  subtotal: number;
+}
 const loadingPhrases = [
   "Selecting the freshest blooms...",
   "Composing your arrangement...",
@@ -23,7 +30,8 @@ export const ResultStep = () => {
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [phraseIndex, setPhraseIndex] = useState(0);
-
+const [stemBreakdown, setStemBreakdown] = useState<StemItem[]>([]);
+const [totalCost, setTotalCost] = useState(0);
   useEffect(() => { generateBouquet(); }, []);
   useEffect(() => {
     if (!loading) return;
@@ -31,36 +39,97 @@ export const ResultStep = () => {
     return () => clearInterval(interval);
   }, [loading]);
 
-  const generateBouquet = async () => {
-    try {
-      setLoading(true); setError(null);
-      const { data: flowers } = await supabase.from("flowers").select("*").eq("mood", data.mood!).eq("in_stock", true);
-      const flowerNames = flowers?.map((f) => f.name) || [];
-      const flowerIngredients = flowers?.map((f) => `${f.name} · ${f.price_per_stem.toLocaleString()}đ/stem`) || [];
-      const { data: genData, error: genError } = await supabase.functions.invoke("generate-bouquet", {
-        body: { mood: data.mood, recipient: data.recipient, budget: data.budget, description: data.description, flowerNames },
-      });
-      if (genError) throw genError;
-      const imageUrl = genData?.imageUrl;
-      if (!imageUrl) throw new Error("No image generated");
-      setGeneratedImageUrl(imageUrl);
-      setIngredients(flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`]);
-      const qrData = crypto.randomUUID();
-      const { data: order, error: orderError } = await supabase.from("orders").insert({
-        mood: data.mood!, recipient_type: data.recipient, budget: data.budget,
-        user_description: data.description || null, selected_flower_ids: flowers?.map((f) => f.id) || [],
-        generated_image_url: imageUrl, qr_code_data: qrData,
-        ingredients: flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`],
-        status: "pending",
-      }).select().single();
-      if (orderError) throw orderError;
-      setOrderId(order.id);
-    } catch (err: any) {
-      setError(err.message || "Failed to generate bouquet");
-      toast.error("Failed to generate bouquet. Please try again.");
-    } finally { setLoading(false); }
-  };
+  // const generateBouquet = async () => {
+  //   try {
+  //     setLoading(true); setError(null);
+  //     const { data: flowers } = await supabase.from("flowers").select("*").eq("mood", data.mood!).eq("in_stock", true);
+  //     const flowerNames = flowers?.map((f) => f.name) || [];
+  //     const flowerIngredients = flowers?.map((f) => `${f.name} · ${f.price_per_stem.toLocaleString()}đ/stem`) || [];
+  //     const { data: genData, error: genError } = await supabase.functions.invoke("generate-bouquet", {
+  //       body: { mood: data.mood, recipient: data.recipient, budget: data.budget, description: data.description, flowerNames },
+  //     });
+  //     if (genError) throw genError;
+  //     const imageUrl = genData?.imageUrl;
+  //     if (!imageUrl) throw new Error("No image generated");
+  //     setGeneratedImageUrl(imageUrl);
+  //     setIngredients(flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`]);
+  //     const qrData = crypto.randomUUID();
+  //     const { data: order, error: orderError } = await supabase.from("orders").insert({
+  //       mood: data.mood!, recipient_type: data.recipient, budget: data.budget,
+  //       user_description: data.description || null, selected_flower_ids: flowers?.map((f) => f.id) || [],
+  //       generated_image_url: imageUrl, qr_code_data: qrData,
+  //       ingredients: flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`],
+  //       status: "pending",
+  //     }).select().single();
+  //     if (orderError) throw orderError;
+  //     setOrderId(order.id);
+  //   } catch (err: any) {
+  //     setError(err.message || "Failed to generate bouquet");
+  //     toast.error("Failed to generate bouquet. Please try again.");
+  //   } finally { setLoading(false); }
+  // };
 
+  const generateBouquet = async () => {
+  try {
+    setLoading(true); setError(null);
+
+    // Lấy hoa kèm price_per_stem (thêm trường này vào select)
+    const { data: flowers } = await supabase
+      .from("flowers")
+      .select("id, name, price_per_stem, image_url")
+      .eq("mood", data.mood!)
+      .eq("in_stock", true);
+
+    // Truyền flowers đầy đủ thay vì chỉ flowerNames
+    const { data: genData, error: genError } = await supabase.functions.invoke("generate-bouquet", {
+      body: {
+        mood: data.mood,
+        recipient: data.recipient,
+        budget: data.budget,
+        description: data.description,
+        flowers: flowers ?? [],   // ← object đầy đủ
+      },
+    });
+
+    if (genError) throw genError;
+    if (!genData?.imageUrl) throw new Error("No image generated");
+
+    setGeneratedImageUrl(genData.imageUrl);
+    setStemBreakdown(genData.stemBreakdown ?? []);
+    setTotalCost(genData.totalCost ?? 0);
+
+    // ingredients vẫn giữ để lưu vào orders
+    const ingredientStrings: string[] =
+      (genData.stemBreakdown as StemItem[])?.map(
+        (i) => `${i.flowerName} · ${i.pricePerStem.toLocaleString()}đ/cành × ${i.stems} = ${i.subtotal.toLocaleString()}đ`
+      ) ?? [];
+
+    setIngredients(ingredientStrings);
+
+    // Lưu order
+    const qrData = crypto.randomUUID();
+    const { data: order, error: orderError } = await supabase.from("orders").insert({
+      mood: data.mood!,
+      recipient_type: data.recipient,
+      budget: data.budget,
+      user_description: data.description || null,
+      selected_flower_ids: flowers?.map((f) => f.id) ?? [],
+      generated_image_url: genData.imageUrl,
+      qr_code_data: qrData,
+      ingredients: ingredientStrings,
+      status: "pending",
+    }).select().single();
+
+    if (orderError) throw orderError;
+    setOrderId(order.id);
+
+  } catch (err: any) {
+    setError(err.message || "Failed to generate bouquet");
+    toast.error("Failed to generate bouquet. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
   const shareUrl = orderId ? `${window.location.origin}/bouquet/${orderId}` : "";
 
   if (loading) {
@@ -168,28 +237,74 @@ export const ResultStep = () => {
           </div>
 
           {/* Ingredients card under image */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-            className="glass-card rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Flower2 className="w-3.5 h-3.5 text-primary" />
-              </div>
-              <p className="text-sm font-display font-semibold text-foreground">Bouquet Ingredients</p>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-              {ingredients.map((ing, i) => {
-                const [name, price] = ing.split(" · ");
-                return (
-                  <motion.div key={i} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + i * 0.07 }}
-                    className="flex flex-col border-l-2 border-primary/20 pl-2.5">
-                    <span className="text-xs font-body font-semibold text-foreground leading-none mb-0.5">{name}</span>
-                    {price && <span className="text-[10px] font-body text-muted-foreground">{price}</span>}
-                  </motion.div>
-                );
-              })}
-            </div>
-          </motion.div>
+        {/* Ingredients card — breakdown chi tiết */}
+<motion.div
+  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.35 }}
+  className="glass-card rounded-2xl p-5"
+>
+  <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center gap-2">
+      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+        <Flower2 className="w-3.5 h-3.5 text-primary" />
+      </div>
+      <p className="text-sm font-display font-semibold text-foreground">
+        Thành phần bó hoa
+      </p>
+    </div>
+    <span className="text-[10px] font-body text-muted-foreground">
+      {stemBreakdown.reduce((s, i) => s + i.stems, 0)} cành tổng
+    </span>
+  </div>
+
+  <div className="flex flex-col gap-2.5">
+    {stemBreakdown.map((item, i) => (
+      <motion.div
+        key={item.flowerId}
+        initial={{ opacity: 0, x: -6 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.4 + i * 0.07 }}
+        className="flex items-center gap-3"
+      >
+        {/* Tên hoa + giá/cành */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-body font-semibold text-foreground leading-none mb-0.5 truncate">
+            {item.flowerName}
+          </p>
+          <p className="text-[10px] font-body text-muted-foreground">
+            {item.pricePerStem.toLocaleString()}đ/cành
+          </p>
+        </div>
+
+        {/* Số cành */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[10px] font-body text-muted-foreground">×</span>
+          <span className="text-sm font-body font-bold text-foreground w-6 text-center">
+            {item.stems}
+          </span>
+        </div>
+
+        {/* Dấu = và thành tiền */}
+        <div className="shrink-0 text-right w-20">
+          <p className="text-xs font-body font-semibold text-primary">
+            {item.subtotal.toLocaleString()}đ
+          </p>
+        </div>
+      </motion.div>
+    ))}
+  </div>
+
+  {/* Tổng cộng */}
+  <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
+    <span className="text-xs font-body text-muted-foreground">Chi phí hoa</span>
+    <span className="text-sm font-display font-semibold text-foreground">
+      {totalCost.toLocaleString()}đ
+    </span>
+  </div>
+  <p className="text-[10px] font-body text-muted-foreground/50 mt-1 text-right">
+    ~10% còn lại cho bao bì & ruy băng
+  </p>
+</motion.div>
         </motion.div>
 
         {/* RIGHT COL: Details + QR + CTA */}

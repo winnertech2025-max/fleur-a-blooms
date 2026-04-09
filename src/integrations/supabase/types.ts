@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          stock: number
           image_url: string | null
           in_stock: boolean
           mood: Database["public"]["Enums"]["flower_mood"]
@@ -31,6 +32,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          stock: number
           in_stock?: boolean
           mood: Database["public"]["Enums"]["flower_mood"]
           name: string
@@ -41,6 +43,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          stock: number
           image_url?: string | null
           in_stock?: boolean
           mood?: Database["public"]["Enums"]["flower_mood"]
