@@ -3,6 +3,15 @@ import { Database } from "@/integrations/supabase/types";
 
 type FlowerMood = Database["public"]["Enums"]["flower_mood"];
 
+export interface PreviewFlower {
+  flowerId: string;
+  flowerName: string;
+  pricePerStem: number;
+  stems: number;
+  subtotal: number;
+  imageUrl?: string | null;
+}
+
 export interface FlowData {
   mood: FlowerMood | null;
   recipient: string;
@@ -10,6 +19,9 @@ export interface FlowData {
   customBudget: string;
   description: string;
   selectedFlowerIds: string[];
+  // Kết quả từ bước Preview
+  previewFlowers: PreviewFlower[];
+  totalCost: number;
 }
 
 interface FlowContextType {
@@ -32,6 +44,8 @@ const initialData: FlowData = {
   customBudget: "",
   description: "",
   selectedFlowerIds: [],
+  previewFlowers: [],
+  totalCost: 0,
 };
 
 export const FlowProvider = ({ children }: { children: ReactNode }) => {

@@ -8,13 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
-interface StemItem {
-  flowerId: string;
-  flowerName: string;
-  pricePerStem: number;
-  stems: number;
-  subtotal: number;
-}
 const loadingPhrases = [
   "Selecting the freshest blooms...",
   "Composing your arrangement...",
@@ -24,114 +17,86 @@ const loadingPhrases = [
 
 export const ResultStep = () => {
   const { data, reset } = useFlow();
-  const [loading, setLoading] = useState(true);
+
+  const [loading, setLoading]                   = useState(true);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [ingredients, setIngredients] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [phraseIndex, setPhraseIndex] = useState(0);
-const [stemBreakdown, setStemBreakdown] = useState<StemItem[]>([]);
-const [totalCost, setTotalCost] = useState(0);
-  useEffect(() => { generateBouquet(); }, []);
+  const [orderId, setOrderId]                   = useState<string | null>(null);
+  const [error, setError]                       = useState<string | null>(null);
+  const [phraseIndex, setPhraseIndex]           = useState(0);
+
+  // Phrase rotator
   useEffect(() => {
     if (!loading) return;
-    const interval = setInterval(() => setPhraseIndex((i) => (i + 1) % loadingPhrases.length), 2200);
-    return () => clearInterval(interval);
+    const t = setInterval(() => setPhraseIndex((i) => (i + 1) % loadingPhrases.length), 2200);
+    return () => clearInterval(t);
   }, [loading]);
 
-  // const generateBouquet = async () => {
-  //   try {
-  //     setLoading(true); setError(null);
-  //     const { data: flowers } = await supabase.from("flowers").select("*").eq("mood", data.mood!).eq("in_stock", true);
-  //     const flowerNames = flowers?.map((f) => f.name) || [];
-  //     const flowerIngredients = flowers?.map((f) => `${f.name} · ${f.price_per_stem.toLocaleString()}đ/stem`) || [];
-  //     const { data: genData, error: genError } = await supabase.functions.invoke("generate-bouquet", {
-  //       body: { mood: data.mood, recipient: data.recipient, budget: data.budget, description: data.description, flowerNames },
-  //     });
-  //     if (genError) throw genError;
-  //     const imageUrl = genData?.imageUrl;
-  //     if (!imageUrl) throw new Error("No image generated");
-  //     setGeneratedImageUrl(imageUrl);
-  //     setIngredients(flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`]);
-  //     const qrData = crypto.randomUUID();
-  //     const { data: order, error: orderError } = await supabase.from("orders").insert({
-  //       mood: data.mood!, recipient_type: data.recipient, budget: data.budget,
-  //       user_description: data.description || null, selected_flower_ids: flowers?.map((f) => f.id) || [],
-  //       generated_image_url: imageUrl, qr_code_data: qrData,
-  //       ingredients: flowerIngredients.length > 0 ? flowerIngredients : [`${data.mood} flowers selection`],
-  //       status: "pending",
-  //     }).select().single();
-  //     if (orderError) throw orderError;
-  //     setOrderId(order.id);
-  //   } catch (err: any) {
-  //     setError(err.message || "Failed to generate bouquet");
-  //     toast.error("Failed to generate bouquet. Please try again.");
-  //   } finally { setLoading(false); }
-  // };
+  useEffect(() => { generateBouquet(); }, []);
 
   const generateBouquet = async () => {
-  try {
-    setLoading(true); setError(null);
+    try {
+      setLoading(true);
+      setError(null);
 
-    // Lấy hoa kèm price_per_stem (thêm trường này vào select)
-    const { data: flowers } = await supabase
-      .from("flowers")
-      .select("id, name, price_per_stem, image_url")
-      .eq("mood", data.mood!)
-      .eq("in_stock", true);
+      // Dùng previewFlowers đã được user confirm từ PreviewStep
+      const flowers = data.previewFlowers.map((f) => ({
+        id: f.flowerId,
+        name: f.flowerName,
+        price_per_stem: f.pricePerStem,
+      }));
 
-    // Truyền flowers đầy đủ thay vì chỉ flowerNames
-    const { data: genData, error: genError } = await supabase.functions.invoke("generate-bouquet", {
-      body: {
-        mood: data.mood,
-        recipient: data.recipient,
-        budget: data.budget,
-        description: data.description,
-        flowers: flowers ?? [],   // ← object đầy đủ
-      },
-    });
+      const { data: genData, error: genError } = await supabase.functions.invoke("generate-bouquet", {
+        body: {
+          mood:        data.mood,
+          recipient:   data.recipient,
+          budget:      data.budget,
+          description: data.description,
+          flowers,                  // ← subset đã chọn, không lấy hết
+          stemBreakdown: data.previewFlowers, // edge function có thể dùng luôn
+        },
+      });
 
-    if (genError) throw genError;
-    if (!genData?.imageUrl) throw new Error("No image generated");
+      if (genError) throw genError;
+      if (!genData?.imageUrl) throw new Error("No image generated");
 
-    setGeneratedImageUrl(genData.imageUrl);
-    setStemBreakdown(genData.stemBreakdown ?? []);
-    setTotalCost(genData.totalCost ?? 0);
+      setGeneratedImageUrl(genData.imageUrl);
 
-    // ingredients vẫn giữ để lưu vào orders
-    const ingredientStrings: string[] =
-      (genData.stemBreakdown as StemItem[])?.map(
-        (i) => `${i.flowerName} · ${i.pricePerStem.toLocaleString()}đ/cành × ${i.stems} = ${i.subtotal.toLocaleString()}đ`
-      ) ?? [];
+      // Build ingredient strings từ previewFlowers (đã có sẵn từ context)
+      const ingredientStrings = data.previewFlowers.map(
+        (f) =>
+          `${f.flowerName} · ${f.pricePerStem.toLocaleString()}đ/cành × ${f.stems} = ${f.subtotal.toLocaleString()}đ`
+      );
 
-    setIngredients(ingredientStrings);
+      // Lưu order (status = "pending" — chưa trừ stock)
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          mood:               data.mood!,
+          recipient_type:     data.recipient,
+          budget:             data.budget,
+          user_description:   data.description || null,
+          selected_flower_ids: data.previewFlowers.map((f) => f.flowerId),
+          generated_image_url: genData.imageUrl,
+          qr_code_data:       crypto.randomUUID(),
+          ingredients:        ingredientStrings,
+          status:             "pending",
+        })
+        .select()
+        .single();
 
-    // Lưu order
-    const qrData = crypto.randomUUID();
-    const { data: order, error: orderError } = await supabase.from("orders").insert({
-      mood: data.mood!,
-      recipient_type: data.recipient,
-      budget: data.budget,
-      user_description: data.description || null,
-      selected_flower_ids: flowers?.map((f) => f.id) ?? [],
-      generated_image_url: genData.imageUrl,
-      qr_code_data: qrData,
-      ingredients: ingredientStrings,
-      status: "pending",
-    }).select().single();
+      if (orderError) throw orderError;
+      setOrderId(order.id);
+    } catch (err: any) {
+      setError(err.message || "Failed to generate bouquet");
+      toast.error("Failed to generate bouquet. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    if (orderError) throw orderError;
-    setOrderId(order.id);
-
-  } catch (err: any) {
-    setError(err.message || "Failed to generate bouquet");
-    toast.error("Failed to generate bouquet. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
   const shareUrl = orderId ? `${window.location.origin}/bouquet/${orderId}` : "";
 
+  // ── Loading ──────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen px-6">
@@ -151,8 +116,9 @@ const [totalCost, setTotalCost] = useState(0);
           <h2 className="text-3xl font-display font-semibold text-foreground mb-3">Crafting your bouquet</h2>
           <div className="h-5 mb-8 overflow-hidden">
             <AnimatePresence mode="wait">
-              <motion.p key={phraseIndex} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.4 }} className="text-sm font-body text-muted-foreground italic">
+              <motion.p key={phraseIndex} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4 }}
+                className="text-sm font-body text-muted-foreground italic">
                 {loadingPhrases[phraseIndex]}
               </motion.p>
             </AnimatePresence>
@@ -169,23 +135,33 @@ const [totalCost, setTotalCost] = useState(0);
     );
   }
 
+  // ── Error ────────────────────────────────────────────────────
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen px-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-xs">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="text-center max-w-xs">
           <div className="w-16 h-16 rounded-full bg-pink-soft flex items-center justify-center mx-auto mb-6">
             <Flower2 className="w-8 h-8 text-primary" />
           </div>
           <h2 className="text-2xl font-display font-semibold text-foreground mb-2">Something went wrong</h2>
           <p className="text-muted-foreground font-body text-sm mb-8 leading-relaxed">{error}</p>
           <div className="flex flex-col gap-3">
-            <Button variant="hero" className="w-full rounded-2xl" onClick={generateBouquet}><RotateCcw className="w-4 h-4 mr-2" />Try Again</Button>
-            <Button variant="ghost" className="w-full rounded-2xl text-muted-foreground" onClick={reset}>Start Over</Button>
+            <Button variant="hero" className="w-full rounded-2xl" onClick={generateBouquet}>
+              <RotateCcw className="w-4 h-4 mr-2" /> Try Again
+            </Button>
+            <Button variant="ghost" className="w-full rounded-2xl text-muted-foreground" onClick={reset}>
+              Start Over
+            </Button>
           </div>
         </motion.div>
       </div>
     );
   }
+
+  // ── Result ───────────────────────────────────────────────────
+  const preview = data.previewFlowers;
+  const totalCost = data.totalCost;
 
   return (
     <div className="flex flex-col min-h-screen px-6 md:px-12 py-8 max-w-5xl mx-auto w-full gap-6">
@@ -204,26 +180,25 @@ const [totalCost, setTotalCost] = useState(0);
         </motion.div>
       </motion.div>
 
-      {/* Main 2-col layout */}
+      {/* 2-col layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 flex-1">
 
-        {/* LEFT COL: Image */}
+        {/* LEFT: Image + ingredients */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
           className="flex flex-col gap-4">
-          {/* Bouquet image */}
+
+          {/* Image */}
           <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-primary/10 aspect-[4/5]">
             {generatedImageUrl && (
               <img src={generatedImageUrl} alt="Your bouquet" className="w-full h-full object-cover" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-            {/* Mood badge */}
             <div className="absolute top-4 left-4">
               <div className="flex items-center gap-1.5 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/60 shadow-sm">
                 <Sparkles className="w-3 h-3 text-primary" />
                 <span className="text-[11px] font-body font-semibold text-primary capitalize">{data.mood}</span>
               </div>
             </div>
-            {/* Bottom info overlay */}
             <div className="absolute bottom-0 left-0 right-0 p-4">
               <div className="flex gap-2">
                 <span className="px-2.5 py-1 rounded-full bg-white/80 backdrop-blur-sm border border-white/50 text-[10px] font-body font-medium text-foreground capitalize">
@@ -236,89 +211,72 @@ const [totalCost, setTotalCost] = useState(0);
             </div>
           </div>
 
-          {/* Ingredients card under image */}
-        {/* Ingredients card — breakdown chi tiết */}
-<motion.div
-  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-  transition={{ delay: 0.35 }}
-  className="glass-card rounded-2xl p-5"
->
-  <div className="flex items-center justify-between mb-4">
-    <div className="flex items-center gap-2">
-      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-        <Flower2 className="w-3.5 h-3.5 text-primary" />
-      </div>
-      <p className="text-sm font-display font-semibold text-foreground">
-        Thành phần bó hoa
-      </p>
-    </div>
-    <span className="text-[10px] font-body text-muted-foreground">
-      {stemBreakdown.reduce((s, i) => s + i.stems, 0)} cành tổng
-    </span>
-  </div>
+          {/* Ingredients breakdown */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+            className="glass-card rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Flower2 className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <p className="text-sm font-display font-semibold text-foreground">Thành phần bó hoa</p>
+              </div>
+              <span className="text-[10px] font-body text-muted-foreground">
+                {preview.reduce((s, f) => s + f.stems, 0)} cành tổng
+              </span>
+            </div>
 
-  <div className="flex flex-col gap-2.5">
-    {stemBreakdown.map((item, i) => (
-      <motion.div
-        key={item.flowerId}
-        initial={{ opacity: 0, x: -6 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.4 + i * 0.07 }}
-        className="flex items-center gap-3"
-      >
-        {/* Tên hoa + giá/cành */}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-body font-semibold text-foreground leading-none mb-0.5 truncate">
-            {item.flowerName}
-          </p>
-          <p className="text-[10px] font-body text-muted-foreground">
-            {item.pricePerStem.toLocaleString()}đ/cành
-          </p>
-        </div>
+            <div className="flex flex-col gap-2.5">
+              {preview.map((item, i) => (
+                <motion.div key={item.flowerId}
+                  initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 + i * 0.07 }}
+                  className="flex items-center gap-3">
+                  {item.imageUrl && (
+                    <img src={item.imageUrl} alt={item.flowerName}
+                      className="w-8 h-8 rounded-lg object-cover shrink-0 border border-border/30" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-body font-semibold text-foreground leading-none mb-0.5 truncate">
+                      {item.flowerName}
+                    </p>
+                    <p className="text-[10px] font-body text-muted-foreground">
+                      {item.pricePerStem.toLocaleString()}đ/cành
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[10px] font-body text-muted-foreground">×</span>
+                    <span className="text-sm font-body font-bold text-foreground w-6 text-center">{item.stems}</span>
+                  </div>
+                  <div className="shrink-0 text-right w-20">
+                    <p className="text-xs font-body font-semibold text-primary">{item.subtotal.toLocaleString()}đ</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
 
-        {/* Số cành */}
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[10px] font-body text-muted-foreground">×</span>
-          <span className="text-sm font-body font-bold text-foreground w-6 text-center">
-            {item.stems}
-          </span>
-        </div>
-
-        {/* Dấu = và thành tiền */}
-        <div className="shrink-0 text-right w-20">
-          <p className="text-xs font-body font-semibold text-primary">
-            {item.subtotal.toLocaleString()}đ
-          </p>
-        </div>
-      </motion.div>
-    ))}
-  </div>
-
-  {/* Tổng cộng */}
-  <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
-    <span className="text-xs font-body text-muted-foreground">Chi phí hoa</span>
-    <span className="text-sm font-display font-semibold text-foreground">
-      {totalCost.toLocaleString()}đ
-    </span>
-  </div>
-  <p className="text-[10px] font-body text-muted-foreground/50 mt-1 text-right">
-    ~10% còn lại cho bao bì & ruy băng
-  </p>
-</motion.div>
+            <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
+              <span className="text-xs font-body text-muted-foreground">Chi phí hoa</span>
+              <span className="text-sm font-display font-semibold text-foreground">{totalCost.toLocaleString()}đ</span>
+            </div>
+            <p className="text-[10px] font-body text-muted-foreground/50 mt-1 text-right">
+              ~{(data.budget - totalCost).toLocaleString()}đ còn lại cho bao bì & ruy băng
+            </p>
+          </motion.div>
         </motion.div>
 
-        {/* RIGHT COL: Details + QR + CTA */}
+        {/* RIGHT: Summary + QR + CTA */}
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
           className="flex flex-col gap-4">
 
-          {/* Order summary card */}
+          {/* Order summary */}
           <div className="glass-card rounded-2xl p-5">
             <p className="text-[10px] font-body tracking-[0.25em] uppercase text-muted-foreground/50 mb-4">Order Summary</p>
             <div className="space-y-4">
               {[
-                { label: "Mood", value: data.mood },
-                { label: "For", value: data.recipient },
-                { label: "Budget", value: `${data.budget.toLocaleString()} VNĐ` },
+                { label: "Mood",    value: data.mood },
+                { label: "For",     value: data.recipient },
+                { label: "Budget",  value: `${data.budget.toLocaleString()} VNĐ` },
               ].map((row, i) => (
                 <div key={row.label}>
                   {i > 0 && <div className="h-px bg-border/40 mb-4" />}
@@ -340,7 +298,7 @@ const [totalCost, setTotalCost] = useState(0);
             </div>
           </div>
 
-          {/* QR Code card */}
+          {/* QR Code */}
           {orderId && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
               className="glass-card rounded-2xl p-5">
@@ -350,21 +308,23 @@ const [totalCost, setTotalCost] = useState(0);
                 </div>
                 <div>
                   <p className="text-sm font-display font-semibold text-foreground leading-none">Bill QR Code</p>
-                  <p className="text-[10px] font-body text-muted-foreground mt-0.5">Show this at the counter</p>
+                  <p className="text-[10px] font-body text-muted-foreground mt-0.5">Đưa mã này cho nhân viên để xác nhận</p>
                 </div>
               </div>
-              {/* QR + info side by side */}
               <div className="flex items-center gap-5">
                 <div className="bg-white p-3 rounded-2xl shadow-sm border border-border/30 shrink-0">
                   <QRCodeSVG value={shareUrl} size={110} bgColor="#ffffff" fgColor="hsl(340,10%,15%)" level="M" />
                 </div>
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-body text-muted-foreground leading-relaxed">
-                    Scan to view and confirm your bouquet order at checkout.
+                    Scan để xem và xác nhận đơn hàng tại quầy.
                   </p>
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-pink-soft border border-primary/15 text-[10px] font-body text-primary w-fit">
-                    ✦ Pending order
+                    ✦ Pending — chờ nhân viên xác nhận
                   </span>
+                  <p className="text-[10px] font-body text-muted-foreground/60">
+                    Stock sẽ được trừ sau khi nhân viên xác nhận đơn.
+                  </p>
                 </div>
               </div>
             </motion.div>

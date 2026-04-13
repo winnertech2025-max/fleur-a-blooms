@@ -7,9 +7,11 @@ import { MoodStep } from "@/components/steps/MoodStep";
 import { RecipientStep } from "@/components/steps/RecipientStep";
 import { BudgetStep } from "@/components/steps/BudgetStep";
 import { DescriptionStep } from "@/components/steps/DescriptionStep";
+import { PreviewStep } from "@/components/steps/PreviewStep";
 import { ResultStep } from "@/components/steps/ResultStep";
 import { PetalBackground } from "@/components/PetalBackground";
 
+// Bước 0–3 hiện progress bar, bước 4 (Preview) + 5 (Result) ẩn
 const TOTAL_STEPS = 4;
 
 const FlowContent = () => {
@@ -23,7 +25,7 @@ const FlowContent = () => {
   return (
     <div className="relative flex flex-col min-h-screen animated-gradient-bg">
       <PetalBackground />
-      
+
       {/* Header */}
       <div className="relative z-10 flex items-center justify-between px-6 pt-6 pb-2">
         <h1 className="text-lg font-display font-semibold text-foreground tracking-wide">
@@ -41,7 +43,8 @@ const FlowContent = () => {
           {step === 1 && <RecipientStep />}
           {step === 2 && <BudgetStep />}
           {step === 3 && <DescriptionStep />}
-          {step >= 4 && <ResultStep />}
+          {step === 4 && <PreviewStep />}
+          {step >= 5 && <ResultStep />}
         </StepTransition>
       </div>
     </div>
